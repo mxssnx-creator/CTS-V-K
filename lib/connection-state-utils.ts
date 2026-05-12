@@ -3,8 +3,9 @@ export function isTruthyFlag(value: unknown): boolean {
 }
 
 export function hasConnectionCredentials(connection: any, minLength = 10, allowPlaceholder = true): boolean {
-  const apiKey = connection?.api_key || connection?.apiKey || ""
-  const apiSecret = connection?.api_secret || connection?.apiSecret || ""
+  // Support both snake_case and camelCase field names
+  const apiKey = connection?.api_key || connection?.apiKey || connection?.api_key_id || ""
+  const apiSecret = connection?.api_secret || connection?.apiSecret || connection?.api_secret_key || ""
 
   if (!allowPlaceholder) {
     if (String(apiKey).includes("PLACEHOLDER") || String(apiSecret).includes("PLACEHOLDER")) {

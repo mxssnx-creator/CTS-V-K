@@ -891,10 +891,13 @@ export class GlobalTradeEngineCoordinator {
         return
       }
 
-      // Get all connections with valid credentials
+      // Get all connections with credentials OR predefined/testnet (same eligibility as startMissingEngines)
+      const { hasConnectionCredentials, isTruthyFlag } = await import("@/lib/connection-state-utils")
       const validConnections = connections.filter((c) => {
-        const hasCredentials = (c.api_key || c.apiKey) && (c.api_secret || c.apiSecret)
-        return hasCredentials
+        const hasAnyCredentials = hasConnectionCredentials(c, 5, true)
+        const isPredefined = isTruthyFlag(c.is_predefined)
+        const isTestnet = isTruthyFlag(c.is_testnet) || isTruthyFlag(c.demo_mode)
+        return hasAnyCredentials || isPredefined || isTestnet
       })
 
       console.log(`[v0] [Coordinator] Found ${validConnections.length} connections to resume`)

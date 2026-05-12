@@ -130,14 +130,15 @@ export async function initializeTradeEngineAutoStart(): Promise<void> {
           return
         }
 
-        const connectionsThatShouldBeRunning = connections.filter((c) => {
-          const isFullyEnabled = isConnectionMainProcessing(c)
-          if (!isFullyEnabled) return false
-          const hasAnyCredentials = hasConnectionCredentials(c, 5, true)
-          const isPredefined = isTruthyFlag(c.is_predefined)
-          const isTestnet = isTruthyFlag(c.is_testnet) || isTruthyFlag(c.demo_mode)
-          return hasAnyCredentials || isPredefined || isTestnet
-        })
+         const connectionsThatShouldBeRunning = connections.filter((c) => {
+           const isFullyEnabled = isConnectionMainProcessing(c)
+           if (!isFullyEnabled) return false
+           const hasAnyCredentials = hasConnectionCredentials(c, 5, true)
+           const isPredefined = isTruthyFlag(c.is_predefined)
+           const isTestnet = isTruthyFlag(c.is_testnet) || isTruthyFlag(c.demo_mode)
+           // Allow engines for connections that have credentials OR are predefined/testnet
+           return hasAnyCredentials || isPredefined || isTestnet
+         })
 
         // Settings load is best-effort; engines consult Redis on each tick.
         try { await loadSettingsAsync() } catch { /* non-critical */ }

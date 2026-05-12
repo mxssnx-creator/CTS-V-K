@@ -323,6 +323,9 @@ export class StrategyCoordinator {
   private _pfThresholdsLoadedAt = 0
   private readonly _pfTtlMs = 5_000
 
+  // ── DIAGNOSTIC: Track last-loaded threshold values for debugging ──────
+  private _lastLoadedThresholds: { base: number; main: number; real: number; live: number } | null = null
+
   // ── Filter axes (P0-2) ──────────────────────────────────────────────
   // Spec: *"filtering by Profitfactor Minimum, DrawdownTime Maximum"*.
   // The canonical Main/Real/Live filter axes are PF-min + DDT-max ONLY.
@@ -435,24 +438,31 @@ export class StrategyCoordinator {
    * pseudo-position reads. Callers may also pass a precomputed context
    * (e.g. when running multiple symbols in the same cycle) — we'll reuse it.
    */
-  async executeStrategyFlow(
-    symbol: string,
-    indications: any[],
-    isPrehistoric: boolean = false,
-    sharedContext?: PositionContext,
-  ): Promise<StrategyEvaluation[]> {
-    const results: StrategyEvaluation[] = []
+   async executeStrategyFlow(
+     symbol: string,
+     indications: any[],
+     isPrehistoric: boolean = false,
+     sharedContext?: PositionContext,
+   ): Promise<StrategyEvaluation[]> {
+     const results: StrategyEvaluation[] = []
 
-    try {
-      // ── Hydrate PF thresholds from operator settings ─────────────
-      // 5s TTL inside the loader bounds Redis pressure; slider changes
-      // in the Settings dialog flow into the engine within ≤5s. We
-      // call this on EVERY entry — both per-symbol and per-batch —
-      // because the TTL cap makes it cheap, and the alternative
-      // (calling it once on engine startup) would require an engine
-      // restart whenever an operator tunes the PF gates. That's not
-      // acceptable for a live-tuning interface.
-      await this.loadAppPFThresholds()
+     try {
+       // ── Hydrate PF thresholds from operator settings ─────────────
+       // 5s TTL inside the loader bounds Redis pressure; slider changes
+       // in the Settings dialog flow into the engine within ≤5s. We
+       // call this on EVERY entry — both per-symbol and per-batch —
+       // because the TTL cap makes it cheap, and the alternative
+       // (calling it once on engine startup) would require an engine
+       // restart whenever an operator tunes the PF gates. That's not
+       // acceptable for a live-tuning interface.
+       await this.loadAppPFThresholds()
+
+       // ── DIAGNOSTIC: Log current PF/DDT thresholds ────────────────────────
+       console.log(
+         `[v0] [StrategyFlow] ${symbol} THRESHOLDS: base_PF>=${this.PF_BASE_MIN.toFixed(2)}, ` +
+         `main_PF>=${this.METRICS.main.minProfitFactor.toFixed(2)} (DDT<=${this.METRICS.main.maxDrawdownTime}m), ` +
+         `real_PF>=${this.METRICS.real.minProfitFactor.toFixed(2)} (DDT<=${this.METRICS.real.maxDrawdownTime}m)`,
+       )
 
       // Fetch the per-cycle position coordination context once. Prehistoric
       // runs use a neutral context (no open positions, no prior outcomes) so
@@ -611,12 +621,19 @@ export class StrategyCoordinator {
         setMap.set(key, { indicationType: ind.type || "direction", direction, indications: [] })
       }
       setMap.get(key)!.indications.push(ind)
-    }
+     }
 
-    const baseSets: StrategySet[] = []
-    const maxEntries = this.config.maxEntriesPerSet || 250
+     const baseSets: StrategySet[] = []
+     const maxEntries = this.config.maxEntriesPerSet || 250
 
-    // Multi-step trailing matrix — `[]` (= no fan-out) collapses to legacy
+     // ── DIAGNOSTIC: Log incoming indication distribution ────────────────────
+     const totalInds = Array.from(setMap.values()).reduce((s, g) => s + g.indications.length, 0)
+     console.log(
+       `[v0] [StrategyFlow] ${symbol} BASE: ${setMap.size} groups, ${totalInds} total indications ` +
+       `(PF_base_min=${this.PF_BASE_MIN.toFixed(2)})`,
+     )
+
+     // Multi-step trailing matrix — `[]` (= no fan-out) collapses to legacy
     // single-Set-per-(type,direction) behaviour. We use `[null]` as a
     // sentinel "untrailed" pass so the body of the loop is shared between
     // both paths.
@@ -855,23 +872,30 @@ export class StrategyCoordinator {
    *      re-appears next cycle, we reuse the cached Set instead of
    *      regenerating ("IF NOT ALREADY CREATED").
    */
-  private async createMainSets(
-    symbol: string,
-    inputSets?: StrategySet[],
-    posCtx?: PositionContext,
-  ): Promise<{ result: StrategyEvaluation; sets: StrategySet[] }> {
-    // Prefer in-memory input (hot-path pipelined from createBaseSets). Fall
-    // back to Redis only when called standalone (tests / diagnostics).
-    let baseSets: StrategySet[]
-    if (inputSets) {
-      baseSets = inputSets
-    } else {
-      const baseKey = `strategies:${this.connectionId}:${symbol}:base:sets`
-      const stored = await getSettings(baseKey)
-      baseSets = stored?.sets || []
-    }
+   private async createMainSets(
+     symbol: string,
+     inputSets?: StrategySet[],
+     posCtx?: PositionContext,
+   ): Promise<{ result: StrategyEvaluation; sets: StrategySet[] }> {
+     // Prefer in-memory input (hot-path pipelined from createBaseSets). Fall
+     // back to Redis only when called standalone (tests / diagnostics).
+     let baseSets: StrategySet[]
+     if (inputSets) {
+       baseSets = inputSets
+     } else {
+       const baseKey = `strategies:${this.connectionId}:${symbol}:base:sets`
+       const stored = await getSettings(baseKey)
+       baseSets = stored?.sets || []
+     }
 
-    const metrics = this.METRICS.main
+     // ── DIAGNOSTIC: Log Base→Main input ────────────────────────────────────
+     console.log(
+       `[v0] [StrategyFlow] ${symbol} MAIN: received ${baseSets.length} base sets ` +
+       `(PF range: ${baseSets.length > 0 ? baseSets[0].avgProfitFactor.toFixed(3) : "N/A"}` +
+       `${baseSets.length > 1 ? `–${baseSets[baseSets.length-1].avgProfitFactor.toFixed(3)}` : ""})`,
+     )
+
+     const metrics = this.METRICS.main
     const maxEntries = this.config.maxEntriesPerSet || 250
     const ctx = posCtx ?? this.neutralPositionContext()
     const mainSets: StrategySet[] = []
@@ -1481,34 +1505,61 @@ export class StrategyCoordinator {
         `${netted.length} survivors (+ ${passthrough.length} passthrough), ` +
         `${netCancelled} axis Sets cancelled out`,
       )
-    }
+     }
 
-    // Resolve the cap with this precedence:
-    //   1. Operator-set `maxRealSets` in Settings → System (Redis app_settings)
-    //   2. Per-instance config override (if any caller passed one)
-    //   3. Default 12000
-    // The coordinator is instantiated by `StrategyProcessor` without a
-    // config arg, so the runtime path is: app_settings → default. We
-    // read inline rather than caching on `this` because Real evaluation
-    // is the only consumer, runs once per (symbol, cycle), and a
-    // per-cycle Redis `hgetall` is already in the hot path elsewhere.
-    let maxRealSets = this.config.maxRealSets ?? 12000
-    try {
-      const { getAppSettings } = await import("@/lib/redis-db")
-      const settings = (await getAppSettings()) || {}
-      const fromSettings = Number(settings.maxRealSets)
-      if (Number.isFinite(fromSettings) && fromSettings > 0) {
-        maxRealSets = fromSettings
-      }
-    } catch { /* fall back to default */ }
-    const realSets = realPostHedge.slice(0, maxRealSets)
+     // Resolve the cap with this precedence:
+     //   1. Operator-set `maxRealSets` in Settings → System (Redis app_settings)
+     //   2. Per-instance config override (if any caller passed one)
+     //   3. Default 12000
+     // The coordinator is instantiated by `StrategyProcessor` without a
+     // config arg, so the runtime path is: app_settings → default. We
+     // read inline rather than caching on `this` because Real evaluation
+     // is the only consumer, runs once per (symbol, cycle), and a
+     // per-cycle Redis `hgetall` is already in the hot path elsewhere.
+     let maxRealSets = this.config.maxRealSets ?? 12000
+     try {
+       const { getAppSettings } = await import("@/lib/redis-db")
+       const settings = (await getAppSettings()) || {}
+       const fromSettings = Number(settings.maxRealSets)
+       if (Number.isFinite(fromSettings) && fromSettings > 0) {
+         maxRealSets = fromSettings
+       }
+     } catch { /* fall back to default */ }
 
-    // Persist per-bucket net targets for the Live-stage partial open/close
-    // reconciliation hook. Documented on `reconcileLivePositions` —
-    // direction unchanged & magnitude grew → partial OPEN for Δ; direction
-    // unchanged & magnitude shrunk → partial CLOSE lowest-PF; direction
-    // flipped or flat:0 → close all in bucket then optionally re-open.
-    if (Object.keys(netTargetWrites).length > 0) {
+     // ── DIAGNOSTIC: Log filter thresholds and counts before cap ─────────────
+     // Helps identify why Real→0: either PF/DDT filter rejected everything,
+     // hedge-net cancelled everything, or the cap is too low.
+     console.log(
+       `[v0] [StrategyFlow] ${symbol} REAL: PF>=${metrics.minProfitFactor.toFixed(2)} ` +
+       `(need), DDT<=${metrics.maxDrawdownTime}m | mainSets=${mainSets.length}, ` +
+       `qualifying_pre_hedge=${realQualifying.length}, maxRealSets=${maxRealSets}`,
+     )
+     if (mainSets.length > 0 && realQualifying.length === 0) {
+       const sample = mainSets[0]
+       console.log(
+         `[v0] [StrategyFlow] ${symbol} REAL: ALL QUALIFYING REJECTED — ` +
+         `sample PF=${sample.avgProfitFactor.toFixed(3)} (need ${metrics.minProfitFactor.toFixed(2)}), ` +
+         `DDT=${Math.round(sample.avgDrawdownTime)}m (limit ${metrics.maxDrawdownTime}m)`,
+       )
+     }
+
+     const realSets = realPostHedge.slice(0, maxRealSets)
+
+     // ── DIAGNOSTIC: Log post-hedge and final count ─────────────────────────
+     if (mainSets.length > 0 && realSets.length === 0) {
+       console.log(
+         `[v0] [StrategyFlow] ${symbol} REAL: POST-HEDGE/CAP 0 sets — ` +
+         `pre_hedge=${realQualifying.length}, post_hedge=${realPostHedge.length}, ` +
+         `final=${realSets.length}`,
+       )
+     }
+
+     // Persist per-bucket net targets for the Live-stage partial open/close
+     // reconciliation hook. Documented on `reconcileLivePositions` —
+     // direction unchanged & magnitude grew → partial OPEN for Δ; direction
+     // unchanged & magnitude shrinks → partial CLOSE lowest-PF; direction
+     // flipped or flat:0 → close all in bucket then optionally re-open.
+     if (Object.keys(netTargetWrites).length > 0) {
       try {
         // Inline client — `client` for the broader function is declared
         // further below; we want a one-shot write here without forward

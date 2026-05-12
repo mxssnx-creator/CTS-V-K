@@ -10,6 +10,7 @@ This is a trading system with Real, Main, Base, and Live strategy stages. The sy
 
 - [x] Loaded Tmp3 project content into CTS-V-K repository
 - [x] Fixed Real stage showing 0 Sets by adding fallback to `strategies:{connId}:real:count` key in `/api/trading/engine-stats`
+- [x] Updated fallback logic to always read `strategies:{connId}:real:count` and `strategies:{connId}:live:count` keys (unconditionally, not just when all counts are 0)
 
 ## Project Structure
 
@@ -27,4 +28,4 @@ The Real stage strategy count was showing 0 because `strategies_real_total` is a
 
 | Date | Changes |
 |------|---------|
-| Today | Loaded Tmp3 project from GitHub; Fixed Real stage count bug |
+| Today | Loaded Tmp3 project from GitHub; Fixed Real stage count bug; Updated fallback to read strategy count keys unconditionally |

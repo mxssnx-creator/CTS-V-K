@@ -36,19 +36,23 @@ export async function GET(req: Request) {
     let realSetCount = parseInt(progHash.strategies_real_total || "0", 10)
     let liveSetCount = parseInt(progHash.strategies_live_total || "0", 10)
 
-    // FALLBACK: settings:strategies:{connId}:*:sets hash keys (written by setSettings).
-    // Also fallback to strategies:{connId}:{stage}:count keys (written by StrategyCoordinator).
-    // Use if progression hash has no data yet (engine just started) or for Real stage specifically.
-    if (baseSetCount === 0 && mainSetCount === 0 && realSetCount === 0) {
-      try {
-        // Try strategies:{connId}:{stage}:count keys first (current cycle count)
-        const [realCount, liveCount] = await Promise.all([
-          redis.get(`strategies:${connectionId}:real:count`).catch(() => null),
-          redis.get(`strategies:${connectionId}:live:count`).catch(() => null),
-        ])
-        if (realCount) realSetCount = parseInt(realCount, 10)
-        if (liveCount) liveSetCount = parseInt(liveCount, 10)
+    // FALLBACK: strategies:{connId}:{stage}:count keys (written by StrategyCoordinator every cycle).
+    // These keys always have the current cycle count, even when progression hash shows 0.
+    try {
+      const [realCount, liveCount] = await Promise.all([
+        redis.get(`strategies:${connectionId}:real:count`).catch(() => null),
+        redis.get(`strategies:${connectionId}:live:count`).catch(() => null),
+      ])
+      if (realCount) realSetCount = parseInt(realCount, 10)
+      if (liveCount) liveSetCount = parseInt(liveCount, 10)
+    } catch (e) {
+      console.warn("[v0] [EngineStats] Error reading strategy count keys:", e)
+    }
 
+    // FALLBACK: settings:strategies:{connId}:*:sets hash keys (written by setSettings).
+    // Use if progression hash has no data yet (engine just started).
+    if (baseSetCount === 0 && mainSetCount === 0) {
+      try {
         const strategyKeys = await redis.keys(`settings:strategies:${connectionId}:*:sets`)
         for (const key of strategyKeys) {
           const hash = await redis.hgetall(key) || {}

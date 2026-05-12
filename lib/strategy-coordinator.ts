@@ -2659,8 +2659,8 @@ export class StrategyCoordinator {
         const outcome: "pos" | "neg" = lastMeanPF >= 1.0 ? "pos" : "neg"
 
         for (const cont of AXIS_CONT) {
-          for (const dir of AXIS_DIRS) {
-            const axisKey = `p${prev}_l${last}_c${cont}_o${outcome}_d${dir}`
+          for (const dir of [baseDefault.direction]) {
+            const axisKey = `p${prev}_l${last}_c${cont}_o${outcome}`
             axisSets.push({
               setKey:          `${parentKey}#axis:${axisKey}`,
               parentSetKey:    parentKey,

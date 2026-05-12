@@ -609,20 +609,21 @@ export class GlobalTradeEngineCoordinator {
     try {
       console.log("[v0] [Coordinator] === START MISSING ENGINES ===")
 
-      // Self-heal: make sure the watchdog and metrics tracker are armed
-      // before we start any new engines (otherwise any stalls on
-      // freshly-started engines wouldn't be recovered).
-      this.ensureBackgroundTimers()
+       // Self-heal: make sure the watchdog and metrics tracker are armed
+       // before we start any new engines (otherwise any stalls on
+       // freshly-started engines wouldn't be recovered).
+       this.ensureBackgroundTimers()
 
-      // Prune dead Map entries before computing `runningIds` so a
-      // failed-init manager doesn't shadow a connection that should
-      // legitimately be (re-)started.
-      this.pruneZombieManagers()
+       // Prune dead Map entries before computing `runningIds` so a
+       // failed-init manager doesn't shadow a connection that should
+       // legitimately be (re-)started.
+       this.pruneZombieManagers()
 
-      const { initRedis, getAssignedAndEnabledConnections, getAllConnections } = await import("@/lib/redis-db")
-      const { logProgressionEvent } = await import("@/lib/engine-progression-logs")
-      
-      await initRedis()
+       const { initRedis, getAssignedAndEnabledConnections, getAllConnections } = await import("@/lib/redis-db")
+       const { logProgressionEvent } = await import("@/lib/engine-progression-logs")
+       const { hasConnectionCredentials, isTruthyFlag } = await import("@/lib/connection-state-utils")
+
+       await initRedis()
       const enabledIds = new Set(connections.map(c => c.id))
       // Only count managers whose engine is actually running, not zombie Map entries from stale closures
       const runningIds = new Set(
@@ -638,15 +639,17 @@ export class GlobalTradeEngineCoordinator {
       for (const connection of connections) {
         if (!runningIds.has(connection.id)) {
           try {
-            const hasCredentials = (connection.api_key || connection.apiKey) && (connection.api_secret || connection.apiSecret)
-            if (!hasCredentials) {
-              console.log(`[v0] [Coordinator] SKIP: ${connection.name} - no credentials`)
-              await logProgressionEvent(connection.id, "engine_skip", "warning", "Engine start skipped - missing credentials", {
-                connectionId: connection.id,
-                connectionName: connection.name,
-              })
-              continue
-            }
+             const hasAnyCredentials = hasConnectionCredentials(connection, 5, true)
+             const isPredefined = isTruthyFlag(connection.is_predefined)
+             const isTestnet = isTruthyFlag(connection.is_testnet) || isTruthyFlag(connection.demo_mode)
+             if (!(hasAnyCredentials || isPredefined || isTestnet)) {
+               console.log(`[v0] [Coordinator] SKIP: ${connection.name} - no credentials and not predefined/testnet`)
+               await logProgressionEvent(connection.id, "engine_skip", "warning", "Engine start skipped - missing credentials and not predefined/testnet", {
+                 connectionId: connection.id,
+                 connectionName: connection.name,
+               })
+               continue
+             }
             
             console.log(`[v0] [Coordinator] START: ${connection.name} (${connection.exchange})`)
             await logProgressionEvent(connection.id, "engine_starting", "info", "Coordinator starting engine", {
@@ -707,10 +710,11 @@ export class GlobalTradeEngineCoordinator {
       this.ensureBackgroundTimers()
       this.pruneZombieManagers()
 
-      const { initRedis, getAssignedAndEnabledConnections, getAllConnections } = await import("@/lib/redis-db")
-      const { logProgressionEvent } = await import("@/lib/engine-progression-logs")
-      
-      await initRedis()
+       const { initRedis, getAssignedAndEnabledConnections, getAllConnections } = await import("@/lib/redis-db")
+       const { logProgressionEvent } = await import("@/lib/engine-progression-logs")
+       const { hasConnectionCredentials, isTruthyFlag } = await import("@/lib/connection-state-utils")
+
+       await initRedis()
       const enabledConnections = await getAssignedAndEnabledConnections()
       const allConnections = await getAllConnections()
       
@@ -730,16 +734,18 @@ export class GlobalTradeEngineCoordinator {
       for (const connection of enabledConnections) {
         if (!runningIds.has(connection.id)) {
           try {
-            const hasCredentials = (connection.api_key || connection.apiKey) && (connection.api_secret || connection.apiSecret)
-            if (!hasCredentials) {
-              console.log(`[v0] [Coordinator] SKIP: ${connection.name} - no credentials`)
-              await logProgressionEvent(connection.id, "engine_skip", "warning", "Engine start skipped - missing credentials", {
-                connectionId: connection.id,
-                connectionName: connection.name,
-              })
-              skipped++
-              continue
-            }
+             const hasAnyCredentials = hasConnectionCredentials(connection, 5, true)
+             const isPredefined = isTruthyFlag(connection.is_predefined)
+             const isTestnet = isTruthyFlag(connection.is_testnet) || isTruthyFlag(connection.demo_mode)
+             if (!(hasAnyCredentials || isPredefined || isTestnet)) {
+               console.log(`[v0] [Coordinator] SKIP: ${connection.name} - no credentials and not predefined/testnet`)
+               await logProgressionEvent(connection.id, "engine_skip", "warning", "Engine start skipped - missing credentials and not predefined/testnet", {
+                 connectionId: connection.id,
+                 connectionName: connection.name,
+               })
+               skipped++
+               continue
+             }
             
             console.log(`[v0] [Coordinator] START: ${connection.name} (${connection.exchange})`)
             await logProgressionEvent(connection.id, "engine_starting", "info", "Coordinator starting engine", {

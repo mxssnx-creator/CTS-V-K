@@ -5,7 +5,6 @@ let ran = false
 
 function shouldRunPreStartup(): boolean {
   if (process.env.NEXT_RUNTIME !== "nodejs") return false
-  if (process.env.NODE_ENV === "production") return false
   return true
 }
 

@@ -37,9 +37,18 @@ export async function GET(req: Request) {
     let liveSetCount = parseInt(progHash.strategies_live_total || "0", 10)
 
     // FALLBACK: settings:strategies:{connId}:*:sets hash keys (written by setSettings).
-    // Only use if progression hash has no data yet (engine just started).
-    if (baseSetCount === 0 && mainSetCount === 0) {
+    // Also fallback to strategies:{connId}:{stage}:count keys (written by StrategyCoordinator).
+    // Use if progression hash has no data yet (engine just started) or for Real stage specifically.
+    if (baseSetCount === 0 && mainSetCount === 0 && realSetCount === 0) {
       try {
+        // Try strategies:{connId}:{stage}:count keys first (current cycle count)
+        const [realCount, liveCount] = await Promise.all([
+          redis.get(`strategies:${connectionId}:real:count`).catch(() => null),
+          redis.get(`strategies:${connectionId}:live:count`).catch(() => null),
+        ])
+        if (realCount) realSetCount = parseInt(realCount, 10)
+        if (liveCount) liveSetCount = parseInt(liveCount, 10)
+
         const strategyKeys = await redis.keys(`settings:strategies:${connectionId}:*:sets`)
         for (const key of strategyKeys) {
           const hash = await redis.hgetall(key) || {}

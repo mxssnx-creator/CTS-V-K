@@ -61,39 +61,45 @@ async function triggerStrategyProcessing() {
          }
        }
 
-      // Trigger strategy processing for each symbol
-      for (const symbol of symbols) {
-        console.log(`Processing strategies for ${conn.id}:${symbol}...`);
+       // Trigger strategy processing for each symbol
+       for (const symbol of symbols) {
+         console.log(`Processing strategies for ${conn.id}:${symbol}...`);
 
-         try {
-           // Import and run strategy processor
-           const { StrategyProcessor } = await import('./lib/trade-engine/strategy-processor');
-           const processor = new StrategyProcessor(conn.id);
+          try {
+            // Import and run strategy processor
+            const { StrategyProcessor } = await import('./lib/trade-engine/strategy-processor');
+            const processor = new StrategyProcessor(conn.id);
 
-           // Run strategy flow
-           const result = await processor.processStrategy(symbol, []);
-           console.log(`✓ Strategy processing completed for ${symbol}: strategiesEvaluated=${result.strategiesEvaluated}, liveReady=${result.liveReady}`);
+            // Run strategy flow
+            const result = await processor.processStrategy(symbol, []);
+            console.log(`✓ Strategy processing completed for ${symbol}: strategiesEvaluated=${result.strategiesEvaluated}, liveReady=${result.liveReady}`);
 
-         } catch (error) {
-           console.error(`Error processing ${symbol}:`, error);
-         }
-      }
-    }
+          } catch (error) {
+            console.error(`Error processing ${symbol}:`, error);
+          }
+       }
+     }
 
-     // Check final state
-     console.log('\n=== FINAL STATE CHECK ===');
-     const strategyKeys = await client.keys('settings:strategies:*:*:*:sets');
-     console.log(`Total strategy sets: ${strategyKeys.length}`);
+      // Check final state
+      console.log('\n=== FINAL STATE CHECK ===');
+      const strategyKeys = await client.keys('settings:strategies:*:*:*:sets');
+      console.log(`Total strategy sets: ${strategyKeys.length}`);
 
-    const progressionKeys = await client.keys('progression:*');
-    console.log(`Progression keys: ${progressionKeys.length}`);
+     const progressionKeys = await client.keys('progression:*');
+     console.log(`Progression keys: ${progressionKeys.length}`);
 
-    const activePositions = await client.scard('pseudo_positions:bingx-x01:active_config_keys').catch(() => 0);
-    console.log(`Active pseudo positions: ${activePositions}`);
+     const activePositions = await client.scard('pseudo_positions:bingx-x01:active_config_keys').catch(() => 0);
+     console.log(`Active pseudo positions: ${activePositions}`);
 
-  } catch (error) {
-    console.error('Error triggering strategy processing:', error);
-  }
+   } catch (error) {
+     console.error('Error triggering strategy processing:', error);
+   }
+ }
+
+// Export the function for use in other modules
+export { triggerStrategyProcessing };
+
+// Only run the function if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  triggerStrategyProcessing();
 }
-
-triggerStrategyProcessing();

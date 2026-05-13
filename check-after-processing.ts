@@ -1,4 +1,5 @@
 import { initRedis, getRedisClient } from './lib/redis-db';
+import { triggerStrategyProcessing } from './trigger-processing';
 
 async function checkAfterProcessing() {
   await initRedis();
@@ -8,7 +9,6 @@ async function checkAfterProcessing() {
   
   // Run the strategy processing first
   console.log('Running strategy processing...');
-  const { triggerStrategyProcessing } = await import('./trigger-processing');
   await triggerStrategyProcessing();
   
   console.log('\nChecking for strategy keys...');

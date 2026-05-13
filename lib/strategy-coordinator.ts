@@ -962,19 +962,21 @@ export class StrategyCoordinator {
             const cached = JSON.parse(fpCache[fingerprint]) as StrategySet
             // Sanity-check the cached record before reusing it
             if (cached && Array.isArray(cached.entries) && cached.entries.length > 0) {
-              // Re-attach the parent's trailing profile in case the cached
-              // payload was written before the profile field existed
-              // (operators upgrading mid-cycle keep working).
-              if (baseSet.trailingProfile && !cached.trailingProfile) {
-                cached.trailingProfile = baseSet.trailingProfile
-              }
-              mainSets.push(cached)
-              // Capture the `default` Main variant for downstream
-              // Position-Count Cartesian fan-out (even on cache hit).
-              if (profile.name === "default") defaultByBaseKey.set(baseSet.setKey, cached)
-              nextFpCache[fingerprint] = fpCache[fingerprint]
-              reused++
-              continue
+               // Re-attach the parent's trailing profile in case the cached
+               // payload was written before the profile field existed
+               // (operators upgrading mid-cycle keep working).
+               if (baseSet.trailingProfile && !cached.trailingProfile) {
+                 cached.trailingProfile = baseSet.trailingProfile
+               }
+               mainSets.push(cached)
+               // Capture the `default` Main variant for downstream
+               // Position-Count Cartesian fan-out (even on cache hit).
+               // NOTE: profile can be null (sentinel for non-trailing path),
+               // so treat null as equivalent to "default".
+               if (!profile || profile.name === "default") defaultByBaseKey.set(baseSet.setKey, cached)
+               nextFpCache[fingerprint] = fpCache[fingerprint]
+               reused++
+               continue
             }
           } catch { /* fall through — regenerate on parse failure */ }
         }

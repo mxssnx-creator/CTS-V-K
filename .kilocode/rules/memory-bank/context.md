@@ -8,7 +8,7 @@ This is a trading system with Real, Main, Base, and Live strategy stages. The sy
 
 ## Recently Completed
 
-- [x] Loaded Tmp3 project content into CTS-V-K repository
+- [x] Fixed strategy progression between Main → Real: axis Sets now properly create both long AND short directions (Cartesian fan-out), and `pause` axis now uses context's `lastPosCount` instead of hardcoded 0
 - [x] Fixed Real stage showing 0 Sets by adding fallback to `strategies:{connId}:real:count` key in `/api/trading/engine-stats`
 - [x] Updated fallback logic to always read `strategies:{connId}:real:count` and `strategies:{connId}:live:count` keys (unconditionally, not just when all counts are 0)
 - [x] Fixed production mode low activity by ensuring trade engines can start for predefined base connections without API credentials
@@ -34,4 +34,4 @@ Resolved production mode issues causing low database counts and activity. Predef
 
 | Date | Changes |
 |------|---------|
-| Today | Loaded Tmp3 project from GitHub; Fixed Real stage count bug; Updated fallback to read strategy count keys unconditionally; Fixed production low-activity issue by enabling engine start for predefined connections without credentials; Removed NODE_ENV check from pre-startup; Extended hasConnectionCredentials for field variants; Aligned resume() eligibility with startMissingEngines |
+| Today | Loaded Tmp3 project from GitHub; Fixed Real stage count bug; Updated fallback to read strategy count keys unconditionally; Fixed production low-activity issue by enabling engine start for predefined connections without credentials; Removed NODE_ENV check from pre-startup; Extended hasConnectionCredentials for field variants; Aligned resume() eligibility with startMissingEngines; Fixed expandAxisSets Cartesian direction fan-out and pause axis |

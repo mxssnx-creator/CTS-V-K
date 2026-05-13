@@ -1027,7 +1027,7 @@ export class StrategyCoordinator {
     if (defaultByBaseKey.size > 0) {
       const minPF = metrics.minProfitFactor   // Same gate as Base→Main
       for (const defaultSet of defaultByBaseKey.values()) {
-        const expanded = this.expandAxisSets(defaultSet, minPF)
+        const expanded = this.expandAxisSets(defaultSet, minPF, symbolCtx)
         for (const axisSet of expanded) {
           mainSets.push(axisSet)
           axisSetsAdded++
@@ -2639,6 +2639,7 @@ export class StrategyCoordinator {
   private expandAxisSets(
     baseDefault: StrategySet,
     minPF: number,
+    ctx?: PositionContext,
   ): StrategySet[] {
     const axisSets: StrategySet[] = []
     const baseEC = baseDefault.entryCount || 0
@@ -2661,7 +2662,8 @@ export class StrategyCoordinator {
         const outcome: "pos" | "neg" = lastMeanPF >= 1.0 ? "pos" : "neg"
 
         for (const cont of AXIS_CONT) {
-          for (const dir of [baseDefault.direction]) {
+          // ── Cartesian fan-out: BOTH long AND short (not just parent direction) ──
+          for (const dir of AXIS_DIRS) {
             const axisKey = `p${prev}_l${last}_c${cont}_o${outcome}`
             axisSets.push({
               setKey:          `${parentKey}#axis:${axisKey}`,
@@ -2689,7 +2691,7 @@ export class StrategyCoordinator {
                 prev,
                 last,
                 cont,
-                pause:     0,
+                pause:     ctx ? Math.max(0, Math.min(8, ctx.lastPosCount)) : 0,
                 direction: dir,
                 axisKey,
                 outcome,

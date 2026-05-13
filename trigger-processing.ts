@@ -80,10 +80,10 @@ async function triggerStrategyProcessing() {
       }
     }
 
-    // Check final state
-    console.log('\n=== FINAL STATE CHECK ===');
-    const strategyKeys = await client.keys('strategies:*:*:*:sets');
-    console.log(`Total strategy sets: ${strategyKeys.length}`);
+     // Check final state
+     console.log('\n=== FINAL STATE CHECK ===');
+     const strategyKeys = await client.keys('settings:strategies:*:*:*:sets');
+     console.log(`Total strategy sets: ${strategyKeys.length}`);
 
     const progressionKeys = await client.keys('progression:*');
     console.log(`Progression keys: ${progressionKeys.length}`);
